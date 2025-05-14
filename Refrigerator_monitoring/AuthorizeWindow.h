@@ -13,11 +13,13 @@ class AuthorizeWindow : public QWidget
 
     QVBoxLayout *vbl;
 
+    QWidget** anotherParent;
+
 public:
-    explicit AuthorizeWindow(QWidget *parent = nullptr);
+    explicit AuthorizeWindow(QWidget *anotherParent, QWidget *parent = nullptr);
 
-signals:
-
+protected slots:
+    void slotAuthorizeButtonClicked();
 };
 
 #endif // AUTHORIZEWINDOW_H
