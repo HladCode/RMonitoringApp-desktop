@@ -1,15 +1,10 @@
-#include "MainWindow.h"
+#include "MainWindow/MainWindow.h"
 
-MainWindow::MainWindow(QWidget *parent): QMainWindow(parent) {
+MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode", "RMonitorig") {
     m = new QMenuBar;
 
-    QPixmap pix("debug\\icons\\Account.png");
-    QPixmap scaled = pix.scaled(55, 55, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-
-    QIcon icon;
-    icon.addPixmap(scaled);
-    aAuth = new QAction(icon, "Login");
-    wAuth = new AuthorizeWindow(this);
+    aAuth = new QAction("Login");
+    wAuth = new AuthorizeWindow("http://78.137.37.34:1488");
     m->addAction(aAuth);
 
     this->setMenuBar(m);
@@ -28,11 +23,16 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent) {
     setCentralWidget(centralWidget);
 
     connect(aAuth, &QAction::triggered, wAuth, &AuthorizeWindow::show);
+    connect(wAuth, &AuthorizeWindow::signalUserLogined, this, &MainWindow::slotSaveDataFromAuth);
 
     setWindowTitle("RMonitoring: unauthorize");
 }
 
 MainWindow::~MainWindow() {
 
+}
+
+void MainWindow::slotSaveDataFromAuth() {
+    setWindowTitle("RMonitoring: "+wAuth->get_name());
 }
 

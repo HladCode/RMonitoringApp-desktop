@@ -2,7 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QtWidgets>
-#include "AuthorizeWindow.h"
+#include "DialogWindows/AuthorizeWindow/AuthorizeWindow.h"
 
 class MainWindow : public QMainWindow
 {
@@ -16,11 +16,18 @@ class MainWindow : public QMainWindow
      QDockWidget *leftDockWidget;
      QListView* sensors_view;
 
+     QSettings settings;
+
+     QString jwt_token;
+     QString jwt_refresh_token;
+
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+protected:
+    void readSettings();    
 
 protected slots:
-
+    void slotSaveDataFromAuth();
 };
 #endif // MAINWINDOW_H
