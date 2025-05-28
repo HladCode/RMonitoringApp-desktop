@@ -26,6 +26,8 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     connect(wAuth, &AuthorizeWindow::signalUserLogined, this, &MainWindow::slotSaveDataFromAuth);
 
     setWindowTitle("RMonitoring: unauthorize");
+
+    setMinimumSize(700, 550);
 }
 
 MainWindow::~MainWindow() {
