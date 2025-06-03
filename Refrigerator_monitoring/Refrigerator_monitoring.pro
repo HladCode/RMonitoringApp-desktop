@@ -11,11 +11,13 @@ CONFIG += c++17
 
 SOURCES += \
     DialogWindows/AuthorizeWindow/AuthorizeWindow.cpp \
+    DialogWindows/SettingsWindow/settingsWindow.cpp \
     main.cpp \
     MainWindow/MainWindow.cpp
 
 HEADERS += \
     DialogWindows/AuthorizeWindow/AuthorizeWindow.h \
+    DialogWindows/SettingsWindow/settingsWindow.h \
     MainWindow/MainWindow.h
 
 # Default rules for deployment.
