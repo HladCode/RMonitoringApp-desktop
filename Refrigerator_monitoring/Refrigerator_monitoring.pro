@@ -12,13 +12,15 @@ CONFIG += c++17
 SOURCES += \
     DialogWindows/AuthorizeWindow/AuthorizeWindow.cpp \
     DialogWindows/SettingsWindow/settingsWindow.cpp \
+    MainWindow/unitListModel/unitListModel.cpp \
     main.cpp \
     MainWindow/MainWindow.cpp
 
 HEADERS += \
     DialogWindows/AuthorizeWindow/AuthorizeWindow.h \
     DialogWindows/SettingsWindow/settingsWindow.h \
-    MainWindow/MainWindow.h
+    MainWindow/MainWindow.h \
+    MainWindow/unitListModel/unitListModel.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
