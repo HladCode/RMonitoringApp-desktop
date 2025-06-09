@@ -39,10 +39,29 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     sensors_view = new QListView;
     sensors_view->setSpacing(5);
     sensors_view->setModel(unitList);
+    bGetSensorData = new QPushButton("Get sensor data");
     placesBox = new QComboBox;
     unitsBox = new QComboBox;
+//----------------------------------
+    dateData = new QDateEdit(QDate::currentDate());
+    dateData->setDisplayFormat("yyyy MM dd");
+
     bApplyFilter = new QPushButton("Show sensors");
-//    unitsBox->addItems(QStringList()<< "unit1" << "unit2" << "unit3");
+    QTimeEdit* startTimeEdit = new QTimeEdit(this);
+    QTimeEdit* endTimeEdit = new QTimeEdit(this);
+    startTimeEdit->setTime(QTime(0,0));
+    endTimeEdit->setTime(QTime(23,59));
+    startTimeEdit->setDisplayFormat("HH:mm");
+    endTimeEdit->setDisplayFormat("HH:mm");
+    connect(startTimeEdit, &QTimeEdit::timeChanged, this, &MainWindow::slotStartTimeChanged);
+    connect(endTimeEdit, &QTimeEdit::timeChanged, this, &MainWindow::slotEndTimeChanged);
+    QHBoxLayout* hblTimeEdits = new QHBoxLayout;
+    hblTimeEdits->addWidget(new QLabel("Start time: "));
+    hblTimeEdits->addWidget(startTimeEdit);
+    hblTimeEdits->addWidget(new QLabel("End time: "));
+    hblTimeEdits->addWidget(endTimeEdit);
+
+//-----------------------------------
     bufleftDockWidget = new QWidget;
     leftDockVBL = new QVBoxLayout;
     leftDockVBL->addWidget(new QLabel("Enter units location: "));
@@ -51,6 +70,9 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     leftDockVBL->addWidget(unitsBox);
     leftDockVBL->addWidget(bApplyFilter);
     leftDockVBL->addWidget(sensors_view);
+    leftDockVBL->addWidget(dateData);
+    leftDockVBL->addLayout(hblTimeEdits);
+    leftDockVBL->addWidget(bGetSensorData);
     bufleftDockWidget->setLayout(leftDockVBL);
 
     leftDockWidget->setWidget(bufleftDockWidget);
@@ -69,6 +91,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     connect(wSettings, &settingsWindow::signalSettingsChanged, this, &MainWindow::slotWSeetingsChanged);
     connect(placesBox, &QComboBox::currentTextChanged, this, &MainWindow::slotPlacesBox);
     connect(bApplyFilter, &QPushButton::clicked, this, &MainWindow::slotApplyFilterClicked);
+    connect(bGetSensorData, &QPushButton::released, this, &MainWindow::slotGetSensorData);
 
     setWindowTitle("RMonitoring: unauthorize");
 
@@ -131,8 +154,20 @@ void MainWindow::getUnits() {
                     values.append(val.toString());
                 }
 
+                qDebug() << "1: " << key << values;
                 units.insert(key, values);
             }
+
+            placesBox->addItem("...");
+
+//            slotPlacesBox(0);
+
+//            if (this->placesBox->count() > 0){
+//                slotPlacesBox(0);
+//            } else {
+//                this->errMsg->showMessage("Something wrong with data(");
+//            }
+
         } else {
             this->errMsg->showMessage("Can not get units data: " + reply->errorString());
         }
@@ -164,6 +199,7 @@ void MainWindow::slotWSeetingsChanged() {
 }
 
 void MainWindow::slotPlacesBox(const QString &place) {
+    if(place == "...") return;
     unitsBox->clear();
     unitsBox->addItems(units[place]);
 }
@@ -216,5 +252,19 @@ void MainWindow::slotApplyFilterClicked() {
         }
         reply->deleteLater();
     });
+}
+
+void MainWindow::slotGetSensorData()
+{
+
+}
+
+void MainWindow::slotStartTimeChanged() {
+
+}
+
+void MainWindow::slotEndTimeChanged()
+{
+
 }
 
