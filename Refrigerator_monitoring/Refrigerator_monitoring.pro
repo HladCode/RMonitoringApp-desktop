@@ -11,16 +11,20 @@ CONFIG += c++17
 
 SOURCES += \
     DialogWindows/AuthorizeWindow/AuthorizeWindow.cpp \
+    DialogWindows/RegistrationWindow/registrationWindow.cpp \
     DialogWindows/SettingsWindow/settingsWindow.cpp \
     MainWindow/unitListModel/unitListModel.cpp \
+    lib/CaptchaWidget/captchaWidget.cpp \
     main.cpp \
     MainWindow/MainWindow.cpp
 
 HEADERS += \
     DialogWindows/AuthorizeWindow/AuthorizeWindow.h \
+    DialogWindows/RegistrationWindow/registrationWindow.h \
     DialogWindows/SettingsWindow/settingsWindow.h \
     MainWindow/MainWindow.h \
-    MainWindow/unitListModel/unitListModel.h
+    MainWindow/unitListModel/unitListModel.h \
+    lib/CaptchaWidget/captchaWidget.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

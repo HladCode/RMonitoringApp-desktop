@@ -11,13 +11,24 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     wSettings->setUrl("http://78.137.37.34:1488"); // TODO: make default url be from QSettings by setURL
     url = wSettings->getUrl();
     wAuth = new AuthorizeWindow(url);
-    m->addAction(aAuth);
+    wReg = new RegistrationWindow(url);
+
+    QMenu* mAuth = new QMenu("Authorization");
+    mAuth->addAction(aAuth);
+    mAuth->addAction("Register...");
+
 
     mUnits = new QMenu("Units");
     mUnits->addAction("Add unit...");
     mUnits->addAction("Change unit...");
 
+    mUsers = new QMenu("Users");
+    mUsers->addAction("Add user to company...");
+    mUsers->addAction("Change user...");
+
+    m->addMenu(mAuth);
     m->addMenu(mUnits);
+    m->addMenu(mUsers);
     m->addAction("Settings...");
 
     this->setMenuBar(m);
@@ -26,7 +37,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     leftDockWidget->setObjectName("leftDockWidget");
     unitList = new unitModel;
     sensors_view = new QListView;
-    sensors_view->setSpacing(15);
+    sensors_view->setSpacing(5);
     sensors_view->setModel(unitList);
     placesBox = new QComboBox;
     unitsBox = new QComboBox;
@@ -142,6 +153,8 @@ void MainWindow::slotMenuTriggered(QAction *a) {
 
     if(actionText == "Settings..."){
         wSettings->show();
+    } else if (actionText == "Register...") {
+        wReg->show();
     }
 }
 

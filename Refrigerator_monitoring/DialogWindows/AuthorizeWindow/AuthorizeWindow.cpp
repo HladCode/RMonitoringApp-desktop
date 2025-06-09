@@ -107,8 +107,5 @@ void AuthorizeWindow::slotAuthorizeButtonClicked(){
         }
         reply->deleteLater();
     });
-
-
-
 }
 

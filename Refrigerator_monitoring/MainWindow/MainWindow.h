@@ -3,6 +3,7 @@
 
 #include <QtWidgets>
 #include "DialogWindows/AuthorizeWindow/AuthorizeWindow.h"
+#include "DialogWindows/RegistrationWindow/registrationWindow.h"
 #include "DialogWindows/SettingsWindow/settingsWindow.h"
 #include "MainWindow/unitListModel/unitListModel.h"
 
@@ -13,8 +14,10 @@ class MainWindow : public QMainWindow
      QMenuBar* m;
      QMenu *mAuth;
      QMenu* mUnits;
+     QMenu* mUsers;
      QAction* aAuth;
      AuthorizeWindow* wAuth;
+     RegistrationWindow* wReg;
      settingsWindow *wSettings;
 
      QMap<QString, QStringList> units;
