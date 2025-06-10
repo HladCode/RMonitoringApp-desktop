@@ -2,12 +2,12 @@
 #define MAINWINDOW_H
 
 #include <QtWidgets>
-#include <QtCharts/QChartView>
-#include <QtCharts/QLineSeries>
+#include <QtCharts>
 #include "DialogWindows/AuthorizeWindow/AuthorizeWindow.h"
 #include "DialogWindows/RegistrationWindow/registrationWindow.h"
 #include "DialogWindows/SettingsWindow/settingsWindow.h"
 #include "MainWindow/unitListModel/unitListModel.h"
+#include "lib/ChartView/chartView.h"
 
 class MainWindow : public QMainWindow
 {
@@ -31,10 +31,16 @@ class MainWindow : public QMainWindow
      QWidget* bufleftDockWidget;
      QVBoxLayout* leftDockVBL;
      QListView* sensors_view;
-     QDateEdit* dateData;
-     QTimeEdit* startTimeEdit;
-     QTimeEdit* endTimeEdit;
+     QDateTimeEdit* startDateTimeEdit;
+     QDateTimeEdit* endDateTimeEdit;
      QPushButton* bGetSensorData;
+
+     QLineSeries *series;
+     QChart *chart;
+     QDateTimeAxis *axisX;
+     QValueAxis *axisY;
+     ChartView *chartView;
+     QLabel* chartInfo;
 
      QSettings settings;
 
@@ -60,5 +66,7 @@ protected slots:
     void slotGetSensorData();
     void slotStartTimeChanged();
     void slotEndTimeChanged();
+    void slotPlusAxisX();
+    void slotMinusAxisX();
 };
 #endif // MAINWINDOW_H

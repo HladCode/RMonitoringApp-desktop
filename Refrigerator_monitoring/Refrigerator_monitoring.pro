@@ -16,6 +16,7 @@ SOURCES += \
     DialogWindows/SettingsWindow/settingsWindow.cpp \
     MainWindow/unitListModel/unitListModel.cpp \
     lib/CaptchaWidget/captchaWidget.cpp \
+    lib/ChartView/chartView.cpp \
     main.cpp \
     MainWindow/MainWindow.cpp
 
@@ -25,7 +26,8 @@ HEADERS += \
     DialogWindows/SettingsWindow/settingsWindow.h \
     MainWindow/MainWindow.h \
     MainWindow/unitListModel/unitListModel.h \
-    lib/CaptchaWidget/captchaWidget.h
+    lib/CaptchaWidget/captchaWidget.h \
+    lib/ChartView/chartView.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

@@ -4,6 +4,36 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     manager = new QNetworkAccessManager(this);
     errMsg = new QErrorMessage;
 
+    // Создание линии
+    series = new QLineSeries();
+    series->setName("Sensor Data");
+
+    // Создание графика
+    chart = new QChart();
+    chart->setTitle("Sensor Value over Time");
+    chart->legend()->hide(); // если не нужен текст возле линии
+    chart->addSeries(series); // пока что без осей
+
+    // Создание осей (могут быть пустыми, настроятся в слоте)
+    axisX = new QDateTimeAxis;
+    axisX->setFormat("HH:mm");
+    axisX->setTitleText("Time");
+
+    axisY = new QValueAxis;
+    axisY->setTitleText("Sensor Value");
+
+    // Добавление осей и привязка серии
+    chart->addAxis(axisX, Qt::AlignBottom);
+    chart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisX);
+    series->attachAxis(axisY);
+
+    // Создание chartView и установка в главное окно
+    chartView = new ChartView(chart);
+    chartInfo = new QLabel("Chart");
+    chartView->setRenderHint(QPainter::Antialiasing);
+
+
     m = new QMenuBar;
 
     aAuth = new QAction("Login...");
@@ -43,23 +73,27 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     placesBox = new QComboBox;
     unitsBox = new QComboBox;
 //----------------------------------
-    dateData = new QDateEdit(QDate::currentDate());
-    dateData->setDisplayFormat("yyyy MM dd");
-
     bApplyFilter = new QPushButton("Show sensors");
-    QTimeEdit* startTimeEdit = new QTimeEdit(this);
-    QTimeEdit* endTimeEdit = new QTimeEdit(this);
-    startTimeEdit->setTime(QTime(0,0));
-    endTimeEdit->setTime(QTime(23,59));
-    startTimeEdit->setDisplayFormat("HH:mm");
-    endTimeEdit->setDisplayFormat("HH:mm");
-    connect(startTimeEdit, &QTimeEdit::timeChanged, this, &MainWindow::slotStartTimeChanged);
-    connect(endTimeEdit, &QTimeEdit::timeChanged, this, &MainWindow::slotEndTimeChanged);
-    QHBoxLayout* hblTimeEdits = new QHBoxLayout;
-    hblTimeEdits->addWidget(new QLabel("Start time: "));
-    hblTimeEdits->addWidget(startTimeEdit);
-    hblTimeEdits->addWidget(new QLabel("End time: "));
-    hblTimeEdits->addWidget(endTimeEdit);
+    startDateTimeEdit = new QDateTimeEdit(this);
+    endDateTimeEdit = new QDateTimeEdit(this);
+    startDateTimeEdit->setCalendarPopup(true);
+    startDateTimeEdit->setDisplayFormat("dd-MM-yyyy HH:mm");
+    startDateTimeEdit->setDateTime(QDateTime::currentDateTime().addDays(-1));
+    endDateTimeEdit->setCalendarPopup(true);
+    endDateTimeEdit->setDisplayFormat("dd-MM-yyyy HH:mm");
+    endDateTimeEdit->setDateTime(QDateTime::currentDateTime());
+    endDateTimeEdit->setMinimumDateTime(startDateTimeEdit->dateTime());
+
+
+    connect(startDateTimeEdit, &QDateTimeEdit::timeChanged, this, &MainWindow::slotStartTimeChanged);
+    connect(endDateTimeEdit, &QDateTimeEdit::timeChanged, this, &MainWindow::slotEndTimeChanged);
+
+    QHBoxLayout* hblDateTime1 = new QHBoxLayout;
+    QHBoxLayout* hblDateTime2 = new QHBoxLayout;
+    hblDateTime1->addWidget(new QLabel("Start time: "));
+    hblDateTime1->addWidget(startDateTimeEdit);
+    hblDateTime2->addWidget(new QLabel("End time: "));
+    hblDateTime2->addWidget(endDateTimeEdit);
 
 //-----------------------------------
     bufleftDockWidget = new QWidget;
@@ -70,8 +104,8 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     leftDockVBL->addWidget(unitsBox);
     leftDockVBL->addWidget(bApplyFilter);
     leftDockVBL->addWidget(sensors_view);
-    leftDockVBL->addWidget(dateData);
-    leftDockVBL->addLayout(hblTimeEdits);
+    leftDockVBL->addLayout(hblDateTime1);
+    leftDockVBL->addLayout(hblDateTime2);
     leftDockVBL->addWidget(bGetSensorData);
     bufleftDockWidget->setLayout(leftDockVBL);
 
@@ -81,10 +115,27 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
 
     this->addDockWidget(Qt::LeftDockWidgetArea, leftDockWidget);
 
-    QLabel *centralWidget = new QLabel(tr("Central widget")); // TODO: графики графики
-    centralWidget->setAlignment(Qt::AlignCenter);
-    setCentralWidget(centralWidget);
+//----------------
+    QWidget* Central_widget = new QWidget;
+    QVBoxLayout* centralVBL = new QVBoxLayout;
+    QHBoxLayout* centralHBL1 = new QHBoxLayout;
 
+    QPushButton* bXPlus = new QPushButton("+");
+    QPushButton* bXMinus = new QPushButton("-");
+    centralHBL1->addWidget(new QLabel("x: "));
+    centralHBL1->addWidget(bXMinus);
+    centralHBL1->addWidget(bXPlus);
+
+    centralVBL->addWidget(chartView);
+    centralVBL->addWidget(chartInfo);
+    centralVBL->addLayout(centralHBL1);
+
+    Central_widget->setLayout(centralVBL);
+    connect(bXPlus, &QPushButton::clicked, this, &MainWindow::slotPlusAxisX);
+    connect(bXMinus, &QPushButton::clicked, this, &MainWindow::slotMinusAxisX);
+
+    setCentralWidget(Central_widget);
+//----------------
     connect(aAuth, &QAction::triggered, wAuth, &AuthorizeWindow::show);
     connect(wAuth, &AuthorizeWindow::signalUserLogined, this, &MainWindow::slotSaveDataFromAuth);
     connect(m, &QMenuBar::triggered, this, &MainWindow::slotMenuTriggered);
@@ -92,6 +143,27 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     connect(placesBox, &QComboBox::currentTextChanged, this, &MainWindow::slotPlacesBox);
     connect(bApplyFilter, &QPushButton::clicked, this, &MainWindow::slotApplyFilterClicked);
     connect(bGetSensorData, &QPushButton::released, this, &MainWindow::slotGetSensorData);
+    connect(series, &QLineSeries::hovered, this, [=](const QPointF &point, bool state) {
+        if (state) {
+            QDateTime dt = QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(std::round(point.x())));
+            //dt.setTimeSpec(Qt::UTC);
+            //dt = dt.toTimeZone(QTimeZone("+03:00"));
+
+            QString timeText = dt.toString(Qt::ISODate);
+            QString valueText = QString("Value: %1").arg(point.y(), 0, 'f', 2);
+            timeText.replace('T', ' ');
+            QString fullText = "Date time: " + timeText + "\n" + valueText;
+
+            qDebug() << "Final text:" << fullText;
+
+            chartInfo->setText(fullText);
+            QToolTip::showText(QCursor::pos(), fullText);
+
+        } else {
+            QToolTip::hideText();
+        }
+    });
+
 
     setWindowTitle("RMonitoring: unauthorize");
 
@@ -245,7 +317,7 @@ void MainWindow::slotApplyFilterClicked() {
             for (auto it = obj.begin(); it != obj.end(); ++it) {
                 QString key = it.key();
                 QString value = it.value().toString();
-                unitList->addItem("Sensor id: "+key+" "+value);
+                unitList->addItem("Sensor id: "+key+" "+value, key.toInt());
             }
         } else {
             qDebug() << "Error:" << reply->errorString();
@@ -254,17 +326,141 @@ void MainWindow::slotApplyFilterClicked() {
     });
 }
 
-void MainWindow::slotGetSensorData()
-{
+void MainWindow::slotStartTimeChanged() { }
 
+void MainWindow::slotEndTimeChanged() { }
+
+void MainWindow::slotPlusAxisX() {
+    QDateTime min = axisX->min().addSecs(3600); // минус 1 час
+    QDateTime max = axisX->max().addSecs(-3600);  // плюс 1 час
+    axisX->setRange(min, max);
 }
 
-void MainWindow::slotStartTimeChanged() {
-
+void MainWindow::slotMinusAxisX() {
+    QDateTime min = axisX->min().addSecs(-3600); // минус 1 час
+    QDateTime max = axisX->max().addSecs(3600);  // плюс 1 час
+    axisX->setRange(min, max);
 }
 
-void MainWindow::slotEndTimeChanged()
-{
+void MainWindow::slotGetSensorData() {
+    if(jwt_token.isEmpty()) return;
+    //qDebug() << unitList->sensor_index(sensors_view->currentIndex());
+    QNetworkRequest request(QUrl(url+"/user/getDataInInterval"));
 
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", ("Bearer " + jwt_token).toUtf8());
+
+    QJsonObject json;
+    json["ID"] = unitsBox->currentText();
+    json["sensor_ID"] = unitList->sensor_index(sensors_view->currentIndex());
+    json["from"] = startDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
+    json["to"] = endDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
+
+    QNetworkReply *reply = manager->post(QNetworkRequest(request), QJsonDocument(json).toJson());
+    connect(reply, &QNetworkReply::finished, [=]() {
+        QByteArray response = reply->readAll();
+        if (reply->error() == QNetworkReply::NoError) {
+            qDebug() << "Response:" << response;
+            if(response.contains("Invalid token") == true) {
+                QMessageBox::information(0, "Information", "You are not logined: " + response);
+                reply->deleteLater();
+                return;
+            }
+
+            //response.remove(response.length()-4, 4);
+
+            QJsonParseError parseError;
+            QJsonDocument doc = QJsonDocument::fromJson(response, &parseError);
+
+            if (parseError.error != QJsonParseError::NoError) {
+                qDebug() << "JSON parse error:" << parseError.errorString();
+                return;
+            }
+
+            if (!doc.isObject()) {
+                qDebug() << "JSON is not an object!";
+                return;
+            }
+            QJsonObject obj = doc.object();
+
+            if(obj.isEmpty()) {
+                QMessageBox::information(0, "Information", "There are no data in response(");
+                return;
+            }
+            // Очистить старые данные и оси
+            series->clear();
+            chart->removeAxis(axisX);
+            chart->removeAxis(axisY);
+
+            // Создать новые оси
+            axisX = new QDateTimeAxis;
+            axisX->setFormat("dd-MM HH:mm");
+            axisX->setTitleText("Time");
+            axisX->setTickCount(10);
+
+            axisY = new QValueAxis;
+            axisY->setTitleText("Sensor value");
+
+            // Обработать JSON
+            QMap<QDateTime, double> sortedData;
+            qint64 minTime = LLONG_MAX;
+            qint64 maxTime = LLONG_MIN;
+
+            for (auto it = obj.begin(); it != obj.end(); ++it) {
+                QDateTime dt = QDateTime::fromString(it.key(), Qt::ISODate);
+                if (!dt.isValid()) {
+                    qDebug() << "Invalid datetime:" << it.key();
+                    continue;
+                }
+                dt.setTimeSpec(Qt::OffsetFromUTC);
+                qint64 ms = dt.toMSecsSinceEpoch();
+
+                if (ms < minTime) minTime = ms;
+                if (ms > maxTime) maxTime = ms;
+
+                sortedData[dt] = it.value().toDouble();
+            }
+
+            // Добавить точки на график
+            for (auto it = sortedData.begin(); it != sortedData.end(); ++it) {
+                series->append(it.key().toMSecsSinceEpoch(), it.value());
+            }
+
+            // Добавить серию на график
+            chart->addSeries(series);
+            chart->addAxis(axisX, Qt::AlignBottom);
+            chart->addAxis(axisY, Qt::AlignLeft);
+            series->attachAxis(axisX);
+            series->attachAxis(axisY);
+
+            // Настроить диапазоны осей
+            axisX->setMin(QDateTime::fromMSecsSinceEpoch(minTime));
+            axisX->setMax(QDateTime::fromMSecsSinceEpoch(maxTime));
+
+            // (опционально) Автоматически масштабировать Y-ось
+            double minY = std::numeric_limits<double>::max();
+            double maxY = std::numeric_limits<double>::lowest();
+            for (const auto& v : sortedData.values()) {
+                if (v < minY) minY = v;
+                if (v > maxY) maxY = v;
+            }
+            axisY->setRange(minY-1, maxY+1);
+
+            series->setColor(Qt::blue);
+            series->setPointsVisible(true);                // Показывать точки
+            series->setPointLabelsVisible(false);           // Показывать подписи
+            series->setPointLabelsFormat("@yPoint");       // Формат: только Y-значение
+            series->setPointLabelsClipping(false);         // Разрешить подписи выходить за границы
+            series->setPointLabelsColor(Qt::black);        // Цвет текста
+            series->setPointLabelsFont(QFont("Arial", 8)); // Размер шрифта
+
+
+        } else {
+            QMessageBox::information(0, "Information", "NETWORK ERROR");
+        }
+        reply->deleteLater();
+    });
 }
+
+
 

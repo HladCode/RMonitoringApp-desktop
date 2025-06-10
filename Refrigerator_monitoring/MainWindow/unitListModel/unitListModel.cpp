@@ -26,10 +26,15 @@ Qt::ItemFlags unitModel::flags(const QModelIndex &index) const {
     return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
 }
 
-void unitModel::addItem(const QString &item) {
+void unitModel::addItem(const QString &item, const int& sensor_id) {
     beginInsertRows(QModelIndex(), m_items.count(), m_items.count());
     m_items.append(item);
+    m_sensors_id.append(sensor_id);
     endInsertRows();
+}
+
+int unitModel::sensor_index(const QModelIndex &index) {
+    return m_sensors_id[index.row()];
 }
 
 void unitModel::clear() {
