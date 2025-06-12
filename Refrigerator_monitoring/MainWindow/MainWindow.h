@@ -35,6 +35,12 @@ class MainWindow : public QMainWindow
      QDateTimeEdit* endDateTimeEdit;
      QPushButton* bGetSensorData;
 
+     QCheckBox* isRealTime;
+     //QPushButton* bStartRealTime;
+     QTimer* realTimeTimer;
+     QDateTime realTimeStartTime;
+
+
      QLineSeries *series;
      QChart *chart;
      QDateTimeAxis *axisX;
@@ -59,8 +65,10 @@ protected:
 
 protected slots:
     void slotSaveDataFromAuth();
+
     void slotMenuTriggered(QAction* a);
     void slotWSeetingsChanged();
+
     void slotPlacesBox(const QString& place);
     void slotApplyFilterClicked();
     void slotGetSensorData();
@@ -68,5 +76,8 @@ protected slots:
     void slotEndTimeChanged();
     void slotPlusAxisX();
     void slotMinusAxisX();
+
+    void slotIsRealTimeChecked(Qt::CheckState state);
+    void slotUpdateRealTimeData();
 };
 #endif // MAINWINDOW_H

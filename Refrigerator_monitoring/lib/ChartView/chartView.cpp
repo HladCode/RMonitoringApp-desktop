@@ -1,12 +1,12 @@
 #include "chartView.h"
 
-ChartView::ChartView(QChart *chart, QWidget *parent)
+ChartView::ChartView(QChart *chart, QLineSeries *series, QWidget *parent)
     : QChartView(chart, parent) {
     setDragMode(QGraphicsView::NoDrag);
     setMouseTracking(true);
     setInteractive(true);
     setCursor(Qt::OpenHandCursor);
-
+    this->series = series;
 }
 
 void ChartView::mousePressEvent(QMouseEvent *event) {
@@ -20,6 +20,7 @@ void ChartView::mousePressEvent(QMouseEvent *event) {
 
 void ChartView::mouseMoveEvent(QMouseEvent *event) {
     if (m_isPanning) {
+        series->setPointLabelsVisible(false);
         QPointF delta = chart()->mapToValue(m_lastMousePos) - chart()->mapToValue(event->pos());
 
         auto* axisX = dynamic_cast<QDateTimeAxis*>(chart()->axisX());
@@ -46,6 +47,7 @@ void ChartView::mouseMoveEvent(QMouseEvent *event) {
 
 void ChartView::mouseReleaseEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton) {
+        series->setPointLabelsVisible(true);
         m_isPanning = false;
         setCursor(Qt::OpenHandCursor);
     }

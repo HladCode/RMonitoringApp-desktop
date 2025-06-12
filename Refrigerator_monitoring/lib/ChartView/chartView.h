@@ -5,7 +5,7 @@
 
 class ChartView : public QChartView {
 public:
-    ChartView(QChart* chart, QWidget* parent = nullptr);
+    ChartView(QChart* chart, QLineSeries *series, QWidget* parent = nullptr);
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;
@@ -17,7 +17,6 @@ protected:
 private:
     bool m_isPanning;
     QPoint m_lastMousePos;
-
-
+    QLineSeries *series;
 };
 #endif // CHARTVIEW_H

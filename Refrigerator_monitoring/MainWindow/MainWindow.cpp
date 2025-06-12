@@ -4,17 +4,14 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     manager = new QNetworkAccessManager(this);
     errMsg = new QErrorMessage;
 
-    // Создание линии
     series = new QLineSeries();
     series->setName("Sensor Data");
 
-    // Создание графика
     chart = new QChart();
     chart->setTitle("Sensor Value over Time");
-    chart->legend()->hide(); // если не нужен текст возле линии
-    chart->addSeries(series); // пока что без осей
+    chart->legend()->hide();
+    chart->addSeries(series);
 
-    // Создание осей (могут быть пустыми, настроятся в слоте)
     axisX = new QDateTimeAxis;
     axisX->setFormat("HH:mm");
     axisX->setTitleText("Time");
@@ -22,14 +19,12 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     axisY = new QValueAxis;
     axisY->setTitleText("Sensor Value");
 
-    // Добавление осей и привязка серии
     chart->addAxis(axisX, Qt::AlignBottom);
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisX);
     series->attachAxis(axisY);
 
-    // Создание chartView и установка в главное окно
-    chartView = new ChartView(chart);
+    chartView = new ChartView(chart, series);
     chartInfo = new QLabel("Chart");
     chartView->setRenderHint(QPainter::Antialiasing);
 
@@ -88,12 +83,26 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     connect(startDateTimeEdit, &QDateTimeEdit::timeChanged, this, &MainWindow::slotStartTimeChanged);
     connect(endDateTimeEdit, &QDateTimeEdit::timeChanged, this, &MainWindow::slotEndTimeChanged);
 
+    isRealTime = new QCheckBox;
+    //bStartRealTime = new QPushButton("Start real time");
+    //bStartRealTime->setDisabled(true);
+    isRealTime->setCheckState(Qt::CheckState::Unchecked);
+    realTimeTimer = new QTimer(this);
+    realTimeTimer->setInterval(60000); // кожну 1 хвилину (60 000 мс) TODO: зробити в налаштуваннях задання інтервалу
+
+    connect(realTimeTimer, &QTimer::timeout, this, &MainWindow::slotUpdateRealTimeData);
+    connect(isRealTime, &QCheckBox::checkStateChanged, this, &MainWindow::slotIsRealTimeChecked);
+
+
     QHBoxLayout* hblDateTime1 = new QHBoxLayout;
     QHBoxLayout* hblDateTime2 = new QHBoxLayout;
+    QHBoxLayout* hblDateTime3 = new QHBoxLayout;
     hblDateTime1->addWidget(new QLabel("Start time: "));
     hblDateTime1->addWidget(startDateTimeEdit);
     hblDateTime2->addWidget(new QLabel("End time: "));
     hblDateTime2->addWidget(endDateTimeEdit);
+    hblDateTime3->addWidget(new QLabel("Enable real time:"));
+    hblDateTime3->addWidget(isRealTime);
 
 //-----------------------------------
     bufleftDockWidget = new QWidget;
@@ -107,6 +116,9 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     leftDockVBL->addLayout(hblDateTime1);
     leftDockVBL->addLayout(hblDateTime2);
     leftDockVBL->addWidget(bGetSensorData);
+    leftDockVBL->addSpacing(15);
+    leftDockVBL->addLayout(hblDateTime3);
+    //leftDockVBL->addWidget(bStartRealTime);
     bufleftDockWidget->setLayout(leftDockVBL);
 
     leftDockWidget->setWidget(bufleftDockWidget);
@@ -122,7 +134,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
 
     QPushButton* bXPlus = new QPushButton("+");
     QPushButton* bXMinus = new QPushButton("-");
-    centralHBL1->addWidget(new QLabel("x: "));
+    centralHBL1->addWidget(new QLabel("Change x scale: ")); // TODO:  with interval
     centralHBL1->addWidget(bXMinus);
     centralHBL1->addWidget(bXPlus);
 
@@ -342,7 +354,36 @@ void MainWindow::slotMinusAxisX() {
     axisX->setRange(min, max);
 }
 
-void MainWindow::slotGetSensorData() {
+void MainWindow::slotIsRealTimeChecked(Qt::CheckState state) {
+    if(state == Qt::CheckState::Checked) {
+        int n = QMessageBox::warning(0, "Warning",
+                                     "Do you really want to start real time monitoring from date time "+
+                                     startDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH mm:ss"),
+                                     QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+        if(n == QMessageBox::No){
+            isRealTime->setCheckState(Qt::CheckState::Unchecked);
+            return;
+        }
+
+        endDateTimeEdit->setDisabled(true);
+        bGetSensorData->setDisabled(true);
+        //bStartRealTime->setDisabled(false);
+
+        realTimeTimer->start(); // запускаємо таймер
+        slotGetSensorData(); // викликаємо перший запит одразу
+
+    } else {
+        endDateTimeEdit->setDisabled(false);
+        bGetSensorData->setDisabled(false);
+        //bStartRealTime->setDisabled(true);
+
+        realTimeTimer->stop();
+    }
+}
+
+// TODO: вынести эти две хуйни по запросу даты с сервака в одну функцию
+// и сделать еще рефреш токенов, если там хуйня выходит ок да
+void MainWindow::slotUpdateRealTimeData() {
     if(jwt_token.isEmpty()) return;
     //qDebug() << unitList->sensor_index(sensors_view->currentIndex());
     QNetworkRequest request(QUrl(url+"/user/getDataInInterval"));
@@ -354,7 +395,7 @@ void MainWindow::slotGetSensorData() {
     json["ID"] = unitsBox->currentText();
     json["sensor_ID"] = unitList->sensor_index(sensors_view->currentIndex());
     json["from"] = startDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
-    json["to"] = endDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
+    json["to"] = QDateTime::currentDateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
 
     QNetworkReply *reply = manager->post(QNetworkRequest(request), QJsonDocument(json).toJson());
     connect(reply, &QNetworkReply::finished, [=]() {
@@ -387,12 +428,11 @@ void MainWindow::slotGetSensorData() {
                 QMessageBox::information(0, "Information", "There are no data in response(");
                 return;
             }
-            // Очистить старые данные и оси
+
             series->clear();
             chart->removeAxis(axisX);
             chart->removeAxis(axisY);
 
-            // Создать новые оси
             axisX = new QDateTimeAxis;
             axisX->setFormat("dd-MM HH:mm");
             axisX->setTitleText("Time");
@@ -448,7 +488,126 @@ void MainWindow::slotGetSensorData() {
 
             series->setColor(Qt::blue);
             series->setPointsVisible(true);                // Показывать точки
-            series->setPointLabelsVisible(false);           // Показывать подписи
+            series->setPointLabelsVisible(true);           // Показывать подписи
+            series->setPointLabelsFormat("@yPoint");       // Формат: только Y-значение
+            series->setPointLabelsClipping(false);         // Разрешить подписи выходить за границы
+            series->setPointLabelsColor(Qt::black);        // Цвет текста
+            series->setPointLabelsFont(QFont("Arial", 8)); // Размер шрифта
+
+
+        } else {
+            QMessageBox::information(0, "Information", "NETWORK ERROR");
+        }
+        reply->deleteLater();
+    });
+}
+
+void MainWindow::slotGetSensorData() {
+    if(jwt_token.isEmpty()) return;
+    //qDebug() << unitList->sensor_index(sensors_view->currentIndex());
+    QNetworkRequest request(QUrl(url+"/user/getDataInInterval"));
+
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setRawHeader("Authorization", ("Bearer " + jwt_token).toUtf8());
+
+    QJsonObject json;
+    json["ID"] = unitsBox->currentText();
+    json["sensor_ID"] = unitList->sensor_index(sensors_view->currentIndex());
+    json["from"] = startDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
+    json["to"] = endDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
+
+    QNetworkReply *reply = manager->post(QNetworkRequest(request), QJsonDocument(json).toJson());
+    connect(reply, &QNetworkReply::finished, [=]() {
+        QByteArray response = reply->readAll();
+        if (reply->error() == QNetworkReply::NoError) {
+            qDebug() << "Response:" << response;
+            if(response.contains("Invalid token") == true) {
+                QMessageBox::information(0, "Information", "You are not logined: " + response);
+                reply->deleteLater();
+                return;
+            }
+
+            //response.remove(response.length()-4, 4);
+
+            QJsonParseError parseError;
+            QJsonDocument doc = QJsonDocument::fromJson(response, &parseError);
+
+            if (parseError.error != QJsonParseError::NoError) {
+                qDebug() << "JSON parse error:" << parseError.errorString();
+                return;
+            }
+
+            if (!doc.isObject()) {
+                qDebug() << "JSON is not an object!";
+                return;
+            }
+            QJsonObject obj = doc.object();
+
+            if(obj.isEmpty()) {
+                QMessageBox::information(0, "Information", "There are no data in response(");
+                return;
+            }
+
+            series->clear();
+            chart->removeAxis(axisX);
+            chart->removeAxis(axisY);
+
+            axisX = new QDateTimeAxis;
+            axisX->setFormat("dd-MM HH:mm");
+            axisX->setTitleText("Time");
+            axisX->setTickCount(10);
+
+            axisY = new QValueAxis;
+            axisY->setTitleText("Sensor value");
+
+            // Обработать JSON
+            QMap<QDateTime, double> sortedData;
+            qint64 minTime = LLONG_MAX;
+            qint64 maxTime = LLONG_MIN;
+
+            for (auto it = obj.begin(); it != obj.end(); ++it) {
+                QDateTime dt = QDateTime::fromString(it.key(), Qt::ISODate);
+                if (!dt.isValid()) {
+                    qDebug() << "Invalid datetime:" << it.key();
+                    continue;
+                }
+                dt.setTimeSpec(Qt::OffsetFromUTC);
+                qint64 ms = dt.toMSecsSinceEpoch();
+
+                if (ms < minTime) minTime = ms;
+                if (ms > maxTime) maxTime = ms;
+
+                sortedData[dt] = it.value().toDouble();
+            }
+
+            // Добавить точки на график
+            for (auto it = sortedData.begin(); it != sortedData.end(); ++it) {
+                series->append(it.key().toMSecsSinceEpoch(), it.value());
+            }
+
+            // Добавить серию на график
+            chart->addSeries(series);
+            chart->addAxis(axisX, Qt::AlignBottom);
+            chart->addAxis(axisY, Qt::AlignLeft);
+            series->attachAxis(axisX);
+            series->attachAxis(axisY);
+
+            // Настроить диапазоны осей
+            axisX->setMin(QDateTime::fromMSecsSinceEpoch(minTime));
+            axisX->setMax(QDateTime::fromMSecsSinceEpoch(maxTime));
+
+            // (опционально) Автоматически масштабировать Y-ось
+            double minY = std::numeric_limits<double>::max();
+            double maxY = std::numeric_limits<double>::lowest();
+            for (const auto& v : sortedData.values()) {
+                if (v < minY) minY = v;
+                if (v > maxY) maxY = v;
+            }
+            axisY->setRange(minY-1, maxY+1);
+
+            series->setColor(Qt::blue);
+            series->setPointsVisible(true);                // Показывать точки
+            series->setPointLabelsVisible(true);           // Показывать подписи
             series->setPointLabelsFormat("@yPoint");       // Формат: только Y-значение
             series->setPointLabelsClipping(false);         // Разрешить подписи выходить за границы
             series->setPointLabelsColor(Qt::black);        // Цвет текста
