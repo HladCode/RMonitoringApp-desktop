@@ -62,6 +62,7 @@ public:
 protected:
     void readSettings();    
     void getUnits();
+    void updateChartFromJson(const QJsonObject &obj);
 
 protected slots:
     void slotSaveDataFromAuth();

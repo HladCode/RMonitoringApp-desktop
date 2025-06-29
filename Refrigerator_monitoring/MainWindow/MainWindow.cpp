@@ -33,7 +33,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
 
     aAuth = new QAction("Login...");
     wSettings = new settingsWindow;
-    wSettings->setUrl("http://78.137.37.34:1488"); // TODO: make default url be from QSettings by setURL
+    wSettings->setUrl("http://213.108.53.91:1488"); // TODO: make default url be from QSettings by setURL
     url = wSettings->getUrl();
     wAuth = new AuthorizeWindow(url);
     wReg = new RegistrationWindow(url);
@@ -88,7 +88,7 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
     //bStartRealTime->setDisabled(true);
     isRealTime->setCheckState(Qt::CheckState::Unchecked);
     realTimeTimer = new QTimer(this);
-    realTimeTimer->setInterval(60000); // кожну 1 хвилину (60 000 мс) TODO: зробити в налаштуваннях задання інтервалу
+    realTimeTimer->setInterval(5000); // кожну 1 хвилину (60 000 мс) TODO: зробити в налаштуваннях задання інтервалу
 
     connect(realTimeTimer, &QTimer::timeout, this, &MainWindow::slotUpdateRealTimeData);
     connect(isRealTime, &QCheckBox::checkStateChanged, this, &MainWindow::slotIsRealTimeChecked);
@@ -169,8 +169,13 @@ MainWindow::MainWindow(QWidget *parent): QMainWindow(parent), settings("HladCode
             qDebug() << "Final text:" << fullText;
 
             chartInfo->setText(fullText);
-            QToolTip::showText(QCursor::pos(), fullText);
-
+            #if defined(Q_OS_LINUX)
+                if (qApp->platformName() != "wayland") {
+                    QToolTip::showText(QCursor::pos(), fullText);
+                }
+            #else
+                QToolTip::showText(QCursor::pos(), fullText);
+            #endif
         } else {
             QToolTip::hideText();
         }
@@ -381,245 +386,139 @@ void MainWindow::slotIsRealTimeChecked(Qt::CheckState state) {
     }
 }
 
-// TODO: вынести эти две хуйни по запросу даты с сервака в одну функцию
-// и сделать еще рефреш токенов, если там хуйня выходит ок да
 void MainWindow::slotUpdateRealTimeData() {
-    if(jwt_token.isEmpty()) return;
-    //qDebug() << unitList->sensor_index(sensors_view->currentIndex());
-    QNetworkRequest request(QUrl(url+"/user/getDataInInterval"));
+    if (jwt_token.isEmpty()) return;
 
+    QNetworkRequest request(QUrl(url + "/user/getDataInInterval"));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("Authorization", ("Bearer " + jwt_token).toUtf8());
 
     QJsonObject json;
     json["ID"] = unitsBox->currentText();
     json["sensor_ID"] = unitList->sensor_index(sensors_view->currentIndex());
-    json["from"] = startDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
-    json["to"] = QDateTime::currentDateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
+    json["from"] = startDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss") + "+03:00";
+    json["to"] = QDateTime::currentDateTime().toString("yyyy-MM-ddTHH:mm:ss") + "+03:00";
 
-    QNetworkReply *reply = manager->post(QNetworkRequest(request), QJsonDocument(json).toJson());
+    QNetworkReply *reply = manager->post(request, QJsonDocument(json).toJson());
     connect(reply, &QNetworkReply::finished, [=]() {
         QByteArray response = reply->readAll();
         if (reply->error() == QNetworkReply::NoError) {
-            qDebug() << "Response:" << response;
-            if(response.contains("Invalid token") == true) {
-                QMessageBox::information(0, "Information", "You are not logined: " + response);
+            if (response.contains("Invalid token")) {
+                QMessageBox::information(this, "Information", "You are not logined: " + response);
                 reply->deleteLater();
                 return;
             }
 
-            //response.remove(response.length()-4, 4);
-
             QJsonParseError parseError;
             QJsonDocument doc = QJsonDocument::fromJson(response, &parseError);
-
-            if (parseError.error != QJsonParseError::NoError) {
-                qDebug() << "JSON parse error:" << parseError.errorString();
+            if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+                qDebug() << "JSON error: " << parseError.errorString();
+                reply->deleteLater();
                 return;
             }
 
-            if (!doc.isObject()) {
-                qDebug() << "JSON is not an object!";
-                return;
-            }
-            QJsonObject obj = doc.object();
-
-            if(obj.isEmpty()) {
-                QMessageBox::information(0, "Information", "There are no data in response(");
-                return;
-            }
-
-            series->clear();
-            chart->removeAxis(axisX);
-            chart->removeAxis(axisY);
-
-            axisX = new QDateTimeAxis;
-            axisX->setFormat("dd-MM HH:mm");
-            axisX->setTitleText("Time");
-            axisX->setTickCount(10);
-
-            axisY = new QValueAxis;
-            axisY->setTitleText("Sensor value");
-
-            // Обработать JSON
-            QMap<QDateTime, double> sortedData;
-            qint64 minTime = LLONG_MAX;
-            qint64 maxTime = LLONG_MIN;
-
-            for (auto it = obj.begin(); it != obj.end(); ++it) {
-                QDateTime dt = QDateTime::fromString(it.key(), Qt::ISODate);
-                if (!dt.isValid()) {
-                    qDebug() << "Invalid datetime:" << it.key();
-                    continue;
-                }
-                dt.setTimeSpec(Qt::OffsetFromUTC);
-                qint64 ms = dt.toMSecsSinceEpoch();
-
-                if (ms < minTime) minTime = ms;
-                if (ms > maxTime) maxTime = ms;
-
-                sortedData[dt] = it.value().toDouble();
-            }
-
-            // Добавить точки на график
-            for (auto it = sortedData.begin(); it != sortedData.end(); ++it) {
-                series->append(it.key().toMSecsSinceEpoch(), it.value());
-            }
-
-            // Добавить серию на график
-            chart->addSeries(series);
-            chart->addAxis(axisX, Qt::AlignBottom);
-            chart->addAxis(axisY, Qt::AlignLeft);
-            series->attachAxis(axisX);
-            series->attachAxis(axisY);
-
-            // Настроить диапазоны осей
-            axisX->setMin(QDateTime::fromMSecsSinceEpoch(minTime));
-            axisX->setMax(QDateTime::fromMSecsSinceEpoch(maxTime));
-
-            // (опционально) Автоматически масштабировать Y-ось
-            double minY = std::numeric_limits<double>::max();
-            double maxY = std::numeric_limits<double>::lowest();
-            for (const auto& v : sortedData.values()) {
-                if (v < minY) minY = v;
-                if (v > maxY) maxY = v;
-            }
-            axisY->setRange(minY-1, maxY+1);
-
-            series->setColor(Qt::blue);
-            series->setPointsVisible(true);                // Показывать точки
-            series->setPointLabelsVisible(true);           // Показывать подписи
-            series->setPointLabelsFormat("@yPoint");       // Формат: только Y-значение
-            series->setPointLabelsClipping(false);         // Разрешить подписи выходить за границы
-            series->setPointLabelsColor(Qt::black);        // Цвет текста
-            series->setPointLabelsFont(QFont("Arial", 8)); // Размер шрифта
-
-
+            updateChartFromJson(doc.object());
         } else {
-            QMessageBox::information(0, "Information", "NETWORK ERROR");
+            QMessageBox::information(this, "Network error", reply->errorString());
         }
+
         reply->deleteLater();
     });
 }
+
 
 void MainWindow::slotGetSensorData() {
-    if(jwt_token.isEmpty()) return;
-    //qDebug() << unitList->sensor_index(sensors_view->currentIndex());
-    QNetworkRequest request(QUrl(url+"/user/getDataInInterval"));
+    if (jwt_token.isEmpty()) return;
 
+    QNetworkRequest request(QUrl(url + "/user/getDataInInterval"));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("Authorization", ("Bearer " + jwt_token).toUtf8());
 
     QJsonObject json;
     json["ID"] = unitsBox->currentText();
     json["sensor_ID"] = unitList->sensor_index(sensors_view->currentIndex());
-    json["from"] = startDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
-    json["to"] = endDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss")+("+03:00");
+    json["from"] = startDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss") + "+03:00";
+    json["to"] = endDateTimeEdit->dateTime().toString("yyyy-MM-ddTHH:mm:ss") + "+03:00";
 
-    QNetworkReply *reply = manager->post(QNetworkRequest(request), QJsonDocument(json).toJson());
+    QNetworkReply *reply = manager->post(request, QJsonDocument(json).toJson());
     connect(reply, &QNetworkReply::finished, [=]() {
         QByteArray response = reply->readAll();
         if (reply->error() == QNetworkReply::NoError) {
-            qDebug() << "Response:" << response;
-            if(response.contains("Invalid token") == true) {
-                QMessageBox::information(0, "Information", "You are not logined: " + response);
+            if (response.contains("Invalid token")) {
+                QMessageBox::information(this, "Information", "You are not logined: " + response);
                 reply->deleteLater();
                 return;
             }
 
-            //response.remove(response.length()-4, 4);
-
             QJsonParseError parseError;
             QJsonDocument doc = QJsonDocument::fromJson(response, &parseError);
-
-            if (parseError.error != QJsonParseError::NoError) {
-                qDebug() << "JSON parse error:" << parseError.errorString();
+            if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+                qDebug() << "JSON error: " << parseError.errorString();
+                reply->deleteLater();
                 return;
             }
 
-            if (!doc.isObject()) {
-                qDebug() << "JSON is not an object!";
-                return;
-            }
-            QJsonObject obj = doc.object();
-
-            if(obj.isEmpty()) {
-                QMessageBox::information(0, "Information", "There are no data in response(");
-                return;
-            }
-
-            series->clear();
-            chart->removeAxis(axisX);
-            chart->removeAxis(axisY);
-
-            axisX = new QDateTimeAxis;
-            axisX->setFormat("dd-MM HH:mm");
-            axisX->setTitleText("Time");
-            axisX->setTickCount(10);
-
-            axisY = new QValueAxis;
-            axisY->setTitleText("Sensor value");
-
-            // Обработать JSON
-            QMap<QDateTime, double> sortedData;
-            qint64 minTime = LLONG_MAX;
-            qint64 maxTime = LLONG_MIN;
-
-            for (auto it = obj.begin(); it != obj.end(); ++it) {
-                QDateTime dt = QDateTime::fromString(it.key(), Qt::ISODate);
-                if (!dt.isValid()) {
-                    qDebug() << "Invalid datetime:" << it.key();
-                    continue;
-                }
-                dt.setTimeSpec(Qt::OffsetFromUTC);
-                qint64 ms = dt.toMSecsSinceEpoch();
-
-                if (ms < minTime) minTime = ms;
-                if (ms > maxTime) maxTime = ms;
-
-                sortedData[dt] = it.value().toDouble();
-            }
-
-            // Добавить точки на график
-            for (auto it = sortedData.begin(); it != sortedData.end(); ++it) {
-                series->append(it.key().toMSecsSinceEpoch(), it.value());
-            }
-
-            // Добавить серию на график
-            chart->addSeries(series);
-            chart->addAxis(axisX, Qt::AlignBottom);
-            chart->addAxis(axisY, Qt::AlignLeft);
-            series->attachAxis(axisX);
-            series->attachAxis(axisY);
-
-            // Настроить диапазоны осей
-            axisX->setMin(QDateTime::fromMSecsSinceEpoch(minTime));
-            axisX->setMax(QDateTime::fromMSecsSinceEpoch(maxTime));
-
-            // (опционально) Автоматически масштабировать Y-ось
-            double minY = std::numeric_limits<double>::max();
-            double maxY = std::numeric_limits<double>::lowest();
-            for (const auto& v : sortedData.values()) {
-                if (v < minY) minY = v;
-                if (v > maxY) maxY = v;
-            }
-            axisY->setRange(minY-1, maxY+1);
-
-            series->setColor(Qt::blue);
-            series->setPointsVisible(true);                // Показывать точки
-            series->setPointLabelsVisible(true);           // Показывать подписи
-            series->setPointLabelsFormat("@yPoint");       // Формат: только Y-значение
-            series->setPointLabelsClipping(false);         // Разрешить подписи выходить за границы
-            series->setPointLabelsColor(Qt::black);        // Цвет текста
-            series->setPointLabelsFont(QFont("Arial", 8)); // Размер шрифта
-
-
+            updateChartFromJson(doc.object());
         } else {
-            QMessageBox::information(0, "Information", "NETWORK ERROR");
+            QMessageBox::information(this, "Network error", reply->errorString());
         }
+
         reply->deleteLater();
     });
 }
+
+
+void MainWindow::updateChartFromJson(const QJsonObject &obj) {
+    if (obj.isEmpty()) {
+        QMessageBox::information(this, "Information", "There are no data in response.");
+        return;
+    }
+
+    QList<QPointF> points;
+    qint64 minTime = LLONG_MAX;
+    qint64 maxTime = LLONG_MIN;
+    double minY = std::numeric_limits<double>::max();
+    double maxY = std::numeric_limits<double>::lowest();
+
+    for (auto it = obj.begin(); it != obj.end(); ++it) {
+        QDateTime dt = QDateTime::fromString(it.key(), Qt::ISODate);
+        if (!dt.isValid()) {
+            qDebug() << "Invalid datetime:" << it.key();
+            continue;
+        }
+
+        dt.setTimeSpec(Qt::OffsetFromUTC);
+        qint64 ms = dt.toMSecsSinceEpoch();
+        double val = it.value().toDouble();
+
+        points << QPointF(ms, val);
+
+        minTime = std::min(minTime, ms);
+        maxTime = std::max(maxTime, ms);
+        minY = std::min(minY, val);
+        maxY = std::max(maxY, val);
+    }
+
+    series->replace(points);
+
+    axisX->setFormat("dd-MM HH:mm");
+    axisX->setTickCount(10);
+    axisX->setTitleText("Time");
+    axisX->setRange(QDateTime::fromMSecsSinceEpoch(minTime),
+                    QDateTime::fromMSecsSinceEpoch(maxTime));
+
+    axisY->setTitleText("Sensor value");
+    axisY->setRange(minY - 1, maxY + 1);
+
+    series->setColor(Qt::blue);
+    series->setPointsVisible(true);
+    series->setPointLabelsVisible(true);
+    series->setPointLabelsFormat("@yPoint");
+    series->setPointLabelsClipping(false);
+    series->setPointLabelsColor(Qt::black);
+    series->setPointLabelsFont(QFont("Arial", 8));
+}
+
 
 
 
